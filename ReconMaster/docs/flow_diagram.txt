@@ -1,0 +1,34 @@
+                     +--------------------+
+                     |      main.py       |
+                     |  (entry point)     |
+                     +---------+----------+
+                               |
+                 check nmap on PATH (scanner.py)
+                               |
+                 +-------------+-------------+
+                 |                           |
+          interactive menu              --cli mode
+          (menu.py)                     (cli.py)
+                 |                           |
+                 +-------------+-------------+
+                               |
+                     validate target (utils.py)
+                               |
+                     select scan type
+                               |
+        +----------------------------------------------+
+        |   scanner.py / banner.py / firewall.py / nse.py |
+        |   build Nmap argument list (no shell=True)      |
+        +----------------------------------------------+
+                               |
+                     subprocess.run(["nmap", ...])
+                               |
+                     capture stdout / XML / errors
+                               |
+                     logger.py records run
+                               |
+                     parser.py extracts structured data
+                               |
+                     report.py renders TXT/XML/JSON/HTML/PDF
+                               |
+                     reports/ output directory

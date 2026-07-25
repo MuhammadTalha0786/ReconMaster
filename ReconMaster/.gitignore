@@ -1,0 +1,29 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Generated output (keep sample_reports/ tracked, ignore live output)
+reports/*
+!reports/.gitkeep
+logs/*
+!logs/.gitkeep
+output/*
+!output/.gitkeep
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Packaging
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ReconMasterReport version="1.0.0">
+  <Meta>
+    <Target>scanme.nmap.org</Target>
+    <Date>2026-07-25 12:18:15</Date>
+    <Duration>12.43s</Duration>
+    <Command>nmap -sV -O scanme.nmap.org</Command>
+  </Meta>
+  <OpenPorts>
+    <Port number="22" protocol="tcp">ssh OpenSSH 8.9p1 Ubuntu</Port>
+    <Port number="80" protocol="tcp">http Apache httpd 2.4.52</Port>
+    <Port number="443" protocol="tcp">ssl/http Apache httpd 2.4.52</Port>
+    <Port number="3306" protocol="tcp">mysql MySQL 8.0.34</Port>
+    <Port number="9929" protocol="tcp">nping-echo Nping echo</Port>
+  </OpenPorts>
+  <OperatingSystem>Linux 5.4 - 5.15</OperatingSystem>
+  <NSEResults>http-title: Go ahead and ScanMe!
+ssh-hostkey: 2048 SHA256:...</NSEResults>
+  <Banners>
+    <Banner port="22">SSH-2.0-OpenSSH_8.9p1</Banner>
+    <Banner port="80">Server: Apache/2.4.52 (Ubuntu)</Banner>
+  </Banners>
+  <Recommendations>
+    <Item>Close or firewall any ports that are not required for business function.</Item>
+    <Item>Keep exposed services patched and running supported versions.</Item>
+    <Item>Disable verbose service banners where possible to reduce fingerprinting.</Item>
+    <Item>Review NSE 'vuln' script findings promptly and validate manually before remediation.</Item>
+    <Item>Restrict management ports (SSH, RDP, etc.) to trusted source addresses only.</Item>
+  </Recommendations>
+  <RawOutput>Starting Nmap 7.94 ( https://nmap.org ) at 2026-07-25 18:30 PKT
+Nmap scan report for scanme.nmap.org (45.33.32.156)
+Host is up (0.11s latency).
+Not shown: 995 closed tcp ports (reset)
+PORT      STATE SERVICE    VERSION
+22/tcp    open  ssh        OpenSSH 8.9p1 Ubuntu
+80/tcp    open  http       Apache httpd 2.4.52
+443/tcp   open  ssl/http   Apache httpd 2.4.52
+3306/tcp  open  mysql      MySQL 8.0.34
+9929/tcp  open  nping-echo Nping echo
+Running: Linux 5.X
+OS details: Linux 5.4 - 5.15
+Nmap done: 1 IP address (1 host up) scanned in 12.43 seconds
+</RawOutput>
+</ReconMasterReport>
