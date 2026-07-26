@@ -1,6 +1,7 @@
                      +--------------------+
                      |      main.py       |
-                     |  (entry point)     |
+                     |  (entry point,     |
+                     |  logs start/exit)  |
                      +---------+----------+
                                |
                  check nmap on PATH (scanner.py)
@@ -10,25 +11,39 @@
           interactive menu              --cli mode
           (menu.py)                     (cli.py)
                  |                           |
-                 +-------------+-------------+
-                               |
-                     validate target (utils.py)
-                               |
-                     select scan type
-                               |
-        +----------------------------------------------+
-        |   scanner.py / banner.py / firewall.py / nse.py |
-        |   build Nmap argument list (no shell=True)      |
-        +----------------------------------------------+
-                               |
-                     subprocess.run(["nmap", ...])
-                               |
-                     capture stdout / XML / errors
-                               |
-                     logger.py records run
-                               |
-                     parser.py extracts structured data
-                               |
-                     report.py renders TXT/XML/JSON/HTML/PDF
-                               |
+        +--------+--------+                  |
+        |                 |                  |
+  single task (1-9)  Multi-Task Scan (10)     |
+        |                 |                  |
+        |     select tasks / NSE / firewall   |
+        |     (utils.parse_multi_selection)   |
+        |                 |                  |
+        |     firewall.validate_firewall_     |
+        |     combination() groups/splits     |
+        |     incompatible techniques         |
+        |                 |                  |
+        |     select timeout mode             |
+        |     (settings.resolve_timeout)      |
+        |                 |                  |
+        +--------+--------+------------------+
+                 |
+        scanner.py / firewall.py / nse.py build
+        Nmap argument list(s) (no shell=True)
+                 |
+        single scan:                multi task:
+        scanner.run_nmap_with_xml   job.run_job() executes each
+        (one subprocess.run)        ScanTask via run_nmap_with_xml,
+                 |                  catching per-task failures/timeouts
+                 |                          |
+                 +-----------+--------------+
+                             |
+                 logger.py records the run(s)
+                             |
+                 parser.py extracts structured data
+                             |
+        single scan: report.py generate_report()      OR
+        multi task:  report.py generate_job_reports()
+        (TXT/XML/JSON/HTML/PDF; escapes scan-derived
+         content before rendering)
+                             |
                      reports/ output directory

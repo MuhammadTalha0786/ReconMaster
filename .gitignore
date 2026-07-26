@@ -15,6 +15,7 @@ logs/*
 !logs/.gitkeep
 output/*
 !output/.gitkeep
+config.json
 
 # OS / editor cruft
 .DS_Store

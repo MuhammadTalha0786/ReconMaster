@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from config import DEFAULT_TIMEOUT, NMAP_BINARY, NSE_CATEGORIES
+from config import NMAP_BINARY, NSE_CATEGORIES
 from logger import get_logger, log_error, log_scan_end, log_scan_start, log_warning
 
 logger = get_logger()
@@ -64,7 +64,7 @@ def _build_base_args(target: str) -> List[str]:
 
 
 def run_nmap_with_xml(
-    target: str, extra_args: List[str], timeout: int = DEFAULT_TIMEOUT
+    target: str, extra_args: List[str], timeout: Optional[int] = None
 ) -> ScanResult:
     """
     Run nmap once, requesting both normal output and XML output written
@@ -72,6 +72,19 @@ def run_nmap_with_xml(
     '-oN -' is not supported simultaneously to stdout, so this helper
     runs Nmap once with '-oX -' and derives the human-readable summary
     from the XML rather than invoking Nmap twice.
+
+    `timeout` is the ReconMaster *application* timeout in seconds — the
+    maximum time ReconMaster will wait for the Nmap subprocess before
+    giving up and terminating it. Pass None for no application timeout
+    (ReconMaster waits indefinitely; Nmap's own internal timing options,
+    if any were passed in extra_args, still apply on Nmap's side).
+
+    This is distinct from Nmap's own scan timing (-T0..-T5, --host-
+    timeout, etc.) which controls how Nmap paces its own probes. If the
+    application timeout is reached, subprocess.run() has already
+    terminated the child process for us — we report this explicitly as
+    an application-timeout condition, not as "the Nmap scan failed",
+    since Nmap itself never got the chance to fail or succeed.
     """
     args = _build_base_args(target)
     args.extend(extra_args)
@@ -85,7 +98,7 @@ def run_nmap_with_xml(
 
     try:
         completed = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout, shell=False
+            args, capture_output=True, text=True, timeout=timeout, shell=False, check=False,
         )
         result.xml_output = completed.stdout
         result.raw_output = completed.stdout
@@ -94,7 +107,18 @@ def run_nmap_with_xml(
             result.error_message = completed.stderr.strip()
 
     except subprocess.TimeoutExpired:
-        result.error_message = f"Scan timed out after {timeout} seconds."
+        # subprocess.run() already killed the child process for us on
+        # TimeoutExpired. This is a ReconMaster *application* timeout,
+        # not an Nmap failure — Nmap never got to finish or report a
+        # result, so we must not describe this as "the scan failed".
+        timeout_label = f"{timeout} seconds" if timeout else "the configured limit"
+        result.error_message = (
+            f"Application timeout reached after {timeout_label} — Nmap was "
+            "still running and was terminated. This does not mean the scan "
+            "failed; it means ReconMaster stopped waiting. Increase the "
+            "timeout (Settings, or choose 'Custom'/'No application timeout') "
+            "if this scan legitimately needs more time."
+        )
         log_error(logger, result.error_message)
         raise ScanTimeoutError(result.error_message)
 
@@ -187,27 +211,66 @@ def nse_script_args(category_key: str, custom_script: Optional[str] = None) -> L
     return ["--script", script_expr]
 
 
+def nse_multi_script_args(category_keys: List[str]) -> List[str]:
+    """
+    Build a single --script argument combining multiple NSE categories
+    using Nmap's supported comma-separated syntax, e.g.
+    --script default,safe,vuln — this runs one Nmap process instead of
+    one per selected category.
+    """
+    if not category_keys:
+        return ["--script", "default"]
+    exprs = [NSE_CATEGORIES.get(key, key) for key in category_keys]
+    return ["--script", ",".join(exprs)]
+
+
 def vuln_scan_args() -> List[str]:
     return ["--script", "vuln"]
 
 
 def firewall_scan_args(technique: str, value: Optional[str] = None) -> List[str]:
     """
-    Standard Nmap firewall / IDS evasion & analysis techniques.
-    These are legitimate, well-documented Nmap options used for network
-    assessment and firewall rule analysis — NOT guaranteed bypass methods.
+    Standard Nmap firewall / filtering-analysis techniques. These are
+    legitimate, well-documented Nmap options used for network assessment
+    and firewall rule-set analysis — NOT guaranteed bypass methods.
+
+    `value` is required (or has a documented safe default) for
+    techniques that take a parameter (idle zombie host, FTP relay,
+    MTU size, decoys, spoofed addresses, interface name, TTL, etc.).
     """
     mapping = {
+        # --- mutually exclusive scan types ---
         "ack": ["-sA"],
         "window": ["-sW"],
+        "maimon": ["-sM"],
         "fin": ["-sF"],
         "null": ["-sN"],
         "xmas": ["-sX"],
         "idle": ["-sI", value] if value else ["-sI"],
+        "bounce": ["-b", value] if value else ["-b"],
+        "ip_protocol": ["-sO"],
+        # --- ping / host-discovery methods (combinable) ---
+        "skip_ping": ["-Pn"],
+        "syn_ping": [f"-PS{value}"] if value else ["-PS"],
+        "ack_ping": [f"-PA{value}"] if value else ["-PA"],
+        "udp_ping": [f"-PU{value}"] if value else ["-PU"],
+        "icmp_ts_ping": ["-PP"],
+        "icmp_mask_ping": ["-PM"],
+        # --- packet-crafting modifiers (combinable) ---
         "fragment": ["-f"],
+        "double_fragment": ["-ff"],
         "mtu": ["--mtu", value] if value else ["--mtu", "24"],
-        "spoof_mac": ["--spoof-mac", value] if value else ["--spoof-mac", "0"],
+        "data_length": ["--data-length", value] if value else ["--data-length", "25"],
         "source_port": ["-g", value] if value else ["-g", "53"],
+        "source_route": ["--ip-options", value] if value else ["--ip-options", "L"],
+        "decoy": ["-D", value] if value else ["-D", "RND:5"],
+        "spoof_mac": ["--spoof-mac", value] if value else ["--spoof-mac", "0"],
+        "spoof_ip": ["-S", value] if value else [],
+        "spoof_iface": ["-e", value] if value else [],
+        "custom_ttl": ["--ttl", value] if value else ["--ttl", "64"],
+        "bad_checksum": ["--badsum"],
+        "paranoid_timing": ["-T0"],
+        "sneaky_timing": ["-T1"],
     }
     return mapping.get(technique, [])
 

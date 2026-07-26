@@ -1,6 +1,6 @@
 {
   "target": "scanme.nmap.org",
-  "date": "2026-07-25 12:18:15",
+  "date": "2026-07-26 06:27:33",
   "duration": "12.43s",
   "command": "nmap -sV -O scanme.nmap.org",
   "open_ports": [
@@ -57,6 +57,6 @@
     "Review NSE 'vuln' script findings promptly and validate manually before remediation.",
     "Restrict management ports (SSH, RDP, etc.) to trusted source addresses only."
   ],
-  "raw_output": "Starting Nmap 7.94 ( https://nmap.org ) at 2026-07-25 18:30 PKT\nNmap scan report for scanme.nmap.org (45.33.32.156)\nHost is up (0.11s latency).\nNot shown: 995 closed tcp ports (reset)\nPORT      STATE SERVICE    VERSION\n22/tcp    open  ssh        OpenSSH 8.9p1 Ubuntu\n80/tcp    open  http       Apache httpd 2.4.52\n443/tcp   open  ssl/http   Apache httpd 2.4.52\n3306/tcp  open  mysql      MySQL 8.0.34\n9929/tcp  open  nping-echo Nping echo\nRunning: Linux 5.X\nOS details: Linux 5.4 - 5.15\nNmap done: 1 IP address (1 host up) scanned in 12.43 seconds\n",
+  "raw_output": "Starting Nmap 7.94 ( https://nmap.org ) at 2026-07-26 06:30 PKT\nNmap scan report for scanme.nmap.org (45.33.32.156)\nHost is up (0.11s latency).\nNot shown: 995 closed tcp ports (reset)\nPORT      STATE SERVICE    VERSION\n22/tcp    open  ssh        OpenSSH 8.9p1 Ubuntu\n80/tcp    open  http       Apache httpd 2.4.52\n443/tcp   open  ssl/http   Apache httpd 2.4.52\n3306/tcp  open  mysql      MySQL 8.0.34\n9929/tcp  open  nping-echo Nping echo\nRunning: Linux 5.X\nOS details: Linux 5.4 - 5.15\nNmap done: 1 IP address (1 host up) scanned in 12.43 seconds\n",
   "generator": "ReconMaster v1.0.0"
 }

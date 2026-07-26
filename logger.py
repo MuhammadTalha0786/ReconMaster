@@ -59,3 +59,32 @@ def log_error(logger: logging.Logger, message: str) -> None:
 
 def log_warning(logger: logging.Logger, message: str) -> None:
     logger.warning(message)
+
+
+def log_program_start(logger: logging.Logger, version: str) -> None:
+    logger.info(f"ReconMaster v{version} starting")
+
+
+def log_program_exit(logger: logging.Logger, exit_code: int) -> None:
+    logger.info(f"ReconMaster exiting | exit_code={exit_code}")
+
+
+def log_job_start(
+    logger: logging.Logger,
+    target: str,
+    task_keys: list[str],
+    timeout_mode: str,
+    nse_scripts: list[str] | None = None,
+    firewall_techniques: list[str] | None = None,
+) -> None:
+    """Log the full configuration of a multi-task scan job before it runs."""
+    logger.info(
+        "Job started | target=%s | tasks=%s | timeout_mode=%s | nse=%s | firewall=%s",
+        target, ",".join(task_keys), timeout_mode,
+        ",".join(nse_scripts or []) or "-",
+        ",".join(firewall_techniques or []) or "-",
+    )
+
+
+def log_report_generated(logger: logging.Logger, fmt: str, path: str) -> None:
+    logger.info(f"Report generated | format={fmt} | path={path}")

@@ -14,9 +14,10 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from config import SAFE_ARG_PATTERN
 
@@ -172,3 +173,63 @@ def format_duration(seconds: float) -> str:
         return f"{seconds:.2f}s"
     minutes, secs = divmod(seconds, 60)
     return f"{int(minutes)}m {secs:.1f}s"
+
+
+@dataclass
+class MultiSelectionResult:
+    """Outcome of parsing a multi-item selection string like '1,2,2,99'."""
+    selected: List[int] = field(default_factory=list)   # valid, de-duplicated, in first-seen order
+    invalid: List[str] = field(default_factory=list)    # tokens that weren't valid numbers in range
+    duplicates: List[int] = field(default_factory=list)  # values seen more than once
+
+
+def parse_multi_selection(raw: str, valid_range: range) -> MultiSelectionResult:
+    """
+    Parse a user-entered multi-selection string into validated integer
+    choices. Accepts comma-separated ("1,2,3"), space-separated
+    ("1 2 3"), or a mix ("1, 2 3"). Duplicates are kept once (in
+    first-seen order) and reported separately; out-of-range or
+    non-numeric tokens are reported as invalid rather than raising.
+
+    Never raises on malformed input — always returns a result object.
+    """
+    result = MultiSelectionResult()
+    if not raw or not raw.strip():
+        return result
+
+    # Split on commas and/or whitespace.
+    tokens = [t for t in re.split(r"[,\s]+", raw.strip()) if t]
+    seen = set()
+
+    for token in tokens:
+        if not token.isdigit():
+            result.invalid.append(token)
+            continue
+        value = int(token)
+        if value not in valid_range:
+            result.invalid.append(token)
+            continue
+        if value in seen:
+            result.duplicates.append(value)
+            continue
+        seen.add(value)
+        result.selected.append(value)
+
+    return result
+
+
+def validate_timeout_value(raw: str) -> Optional[int]:
+    """
+    Validate a user-entered custom timeout in seconds. Returns the
+    integer value if valid (a positive whole number), or None if the
+    input is empty, non-numeric, zero, or negative. Callers treat None
+    as "invalid — re-prompt", not as "unlimited" (unlimited is a
+    separate, explicit menu choice).
+    """
+    raw = raw.strip()
+    if not raw or not raw.isdigit():
+        return None
+    value = int(raw)
+    if value <= 0:
+        return None
+    return value

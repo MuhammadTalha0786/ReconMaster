@@ -1,0 +1,90 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ReconMasterJobReport version="1.0.0">
+  <Meta>
+    <Target>scanme.nmap.org</Target>
+    <ScanStarted>2026-07-26 06:30:00</ScanStarted>
+    <ScanFinished>2026-07-26 07:00:15</ScanFinished>
+    <Duration>1859.70s</Duration>
+  </Meta>
+  <Sections>
+    <Section index="1" status="COMPLETED">
+      <Label>Host Discovery</Label>
+      <Command>nmap -sn scanme.nmap.org</Command>
+      <Duration>0.80s</Duration>
+      <Error />
+      <Output>Host is up (0.11s latency).</Output>
+    </Section>
+    <Section index="2" status="COMPLETED">
+      <Label>Port Scan</Label>
+      <Command>nmap -F scanme.nmap.org</Command>
+      <Duration>4.20s</Duration>
+      <Error />
+      <Output>Starting Nmap 7.94 ( https://nmap.org ) at 2026-07-26 06:30 PKT
+Nmap scan report for scanme.nmap.org (45.33.32.156)
+Host is up (0.11s latency).
+Not shown: 995 closed tcp ports (reset)
+PORT      STATE SERVICE    VERSION
+22/tcp    open  ssh        OpenSSH 8.9p1 Ubuntu
+80/tcp    open  http       Apache httpd 2.4.52
+443/tcp   open  ssl/http   Apache httpd 2.4.52
+3306/tcp  open  mysql      MySQL 8.0.34
+9929/tcp  open  nping-echo Nping echo
+Running: Linux 5.X
+OS details: Linux 5.4 - 5.15
+Nmap done: 1 IP address (1 host up) scanned in 12.43 seconds
+</Output>
+    </Section>
+    <Section index="3" status="SKIPPED">
+      <Label>Service/Version Detection</Label>
+      <Command>-sV</Command>
+      <Duration>-</Duration>
+      <Error />
+      <Output />
+    </Section>
+    <Section index="4" status="COMPLETED">
+      <Label>NSE Script Scan</Label>
+      <Command>nmap --script default,safe scanme.nmap.org</Command>
+      <Duration>9.10s</Duration>
+      <Error />
+      <Output>http-title: Go ahead and ScanMe!</Output>
+    </Section>
+    <Section index="5" status="TIMEOUT">
+      <Label>Firewall Assessment (ack, fragment)</Label>
+      <Command>-sA -f</Command>
+      <Duration>1800.00s</Duration>
+      <Error>Application timeout reached after 1800 seconds</Error>
+      <Output />
+    </Section>
+    <Section index="6" status="COMPLETED">
+      <Label>Aggressive Scan</Label>
+      <Command>nmap -A scanme.nmap.org</Command>
+      <Duration>45.60s</Duration>
+      <Error />
+      <Output>Starting Nmap 7.94 ( https://nmap.org ) at 2026-07-26 06:30 PKT
+Nmap scan report for scanme.nmap.org (45.33.32.156)
+Host is up (0.11s latency).
+Not shown: 995 closed tcp ports (reset)
+PORT      STATE SERVICE    VERSION
+22/tcp    open  ssh        OpenSSH 8.9p1 Ubuntu
+80/tcp    open  http       Apache httpd 2.4.52
+443/tcp   open  ssl/http   Apache httpd 2.4.52
+3306/tcp  open  mysql      MySQL 8.0.34
+9929/tcp  open  nping-echo Nping echo
+Running: Linux 5.X
+OS details: Linux 5.4 - 5.15
+Nmap done: 1 IP address (1 host up) scanned in 12.43 seconds
+</Output>
+    </Section>
+  </Sections>
+  <Notes>
+    <Note>Service/Version Detection was skipped: Aggressive Scan (-A) already performs service/version detection.</Note>
+  </Notes>
+  <Summary>
+    <Status name="PENDING">0</Status>
+    <Status name="RUNNING">0</Status>
+    <Status name="COMPLETED">4</Status>
+    <Status name="FAILED">0</Status>
+    <Status name="TIMEOUT">1</Status>
+    <Status name="SKIPPED">1</Status>
+  </Summary>
+</ReconMasterJobReport>

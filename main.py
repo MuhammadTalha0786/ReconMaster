@@ -19,7 +19,8 @@ import sys
 from rich.console import Console
 
 from cli import run_cli
-from logger import get_logger, log_error
+from config import APP_VERSION
+from logger import get_logger, log_error, log_program_exit, log_program_start
 from scanner import check_nmap_available
 
 console = Console()
@@ -30,6 +31,13 @@ def main() -> int:
     if any(flag in sys.argv for flag in ("-h", "--help", "--version")):
         return run_cli()
 
+    log_program_start(logger, APP_VERSION)
+    exit_code = _run()
+    log_program_exit(logger, exit_code)
+    return exit_code
+
+
+def _run() -> int:
     if not check_nmap_available():
         console.print(
             "[bold red]Nmap was not found on PATH.[/bold red]\n"
