@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" width="900" height="260">
+  <defs>
+    <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3fd0ff" stop-opacity="0.55"/>
+      <stop offset="70%" stop-color="#3fd0ff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#3fd0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7be8ff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#7be8ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="hexStroke" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5fd8ff"/>
+      <stop offset="100%" stop-color="#1c6b8a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background: transparent -->
+  <rect width="900" height="260" fill="none"/>
+
+  <!-- Mark: hexagon shield frame with radar sweep and network nodes -->
+  <g transform="translate(130,130)">
+    <circle r="112" fill="url(#radarGlow)"/>
+
+    <!-- Hexagon / shield outline -->
+    <polygon points="0,-100 87,-50 87,50 0,100 -87,50 -87,-50"
+             fill="#0b1622" stroke="url(#hexStroke)" stroke-width="4"/>
+
+    <!-- Radar range rings -->
+    <circle r="75" fill="none" stroke="#2f7d99" stroke-width="1.5" opacity="0.55"/>
+    <circle r="50" fill="none" stroke="#2f7d99" stroke-width="1.5" opacity="0.55"/>
+    <circle r="25" fill="none" stroke="#2f7d99" stroke-width="1.5" opacity="0.55"/>
+
+    <!-- Crosshair -->
+    <line x1="-88" y1="0" x2="88" y2="0" stroke="#2f7d99" stroke-width="1" opacity="0.4"/>
+    <line x1="0" y1="-88" x2="0" y2="88" stroke="#2f7d99" stroke-width="1" opacity="0.4"/>
+
+    <!-- Radar sweep wedge -->
+    <path d="M 0 0 L 0 -82 A 82 82 0 0 1 71 -41 Z" fill="url(#sweepGrad)"/>
+    <line x1="0" y1="0" x2="71" y2="-41" stroke="#9beeff" stroke-width="2.5"/>
+
+    <!-- Network nodes discovered by the sweep -->
+    <circle cx="38" cy="-52" r="5" fill="#9beeff"/>
+    <circle cx="55" cy="8" r="4.5" fill="#5fd8ff"/>
+    <circle cx="-30" cy="45" r="4.5" fill="#3a9dbf"/>
+    <circle cx="-52" cy="-22" r="4" fill="#3a9dbf"/>
+    <circle cx="12" cy="60" r="4" fill="#3a9dbf"/>
+
+    <!-- Node connection lines (subtle recon graph) -->
+    <g stroke="#3fa8c9" stroke-width="1.2" opacity="0.6">
+      <line x1="38" y1="-52" x2="55" y2="8"/>
+      <line x1="55" y1="8" x2="12" y2="60"/>
+      <line x1="12" y1="60" x2="-30" y2="45"/>
+      <line x1="-30" y1="45" x2="-52" y2="-22"/>
+    </g>
+
+    <!-- Center origin point -->
+    <circle r="6" fill="#eafcff"/>
+    <circle r="6" fill="none" stroke="#5fd8ff" stroke-width="2"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(280,105)" font-family="Helvetica, Arial, sans-serif">
+    <text x="0" y="0" font-size="58" font-weight="700" fill="#eaf6fb" letter-spacing="1">Recon<tspan fill="#5fd8ff">Master</tspan></text>
+    <text x="2" y="38" font-size="20" font-weight="400" fill="#7fa9ba" letter-spacing="3">NETWORK RECONNAISSANCE FRAMEWORK</text>
+  </g>
+</svg>

@@ -29,10 +29,10 @@ import nse as nse_mod
 import parser as parser_mod
 import scanner
 from config import APP_NAME, APP_SUBTITLE, APP_VERSION, REPORT_FORMATS
+from environment import filter_available_formats
 from job import ScanJob, ScanTask, TASK_LABELS, TASK_ORDER, TaskStatus, order_tasks, run_job, skip_redundant_tasks
 from report import (
-    build_job_report_data, build_report_data, generate_all_formats,
-    generate_job_reports, generate_report,
+    build_job_report_data, build_report_data, generate_job_reports, generate_report,
 )
 from scanner import (
     NmapNotFoundError, ScanTimeoutError, aggressive_scan_args, custom_command_args,
@@ -129,13 +129,16 @@ def _report_flow(result: scanner.ScanResult) -> None:
         console.print(Panel(result.raw_output, title="Terminal Report"))
         return
 
+    requested = ["txt", "xml", "json", "html", "pdf"] if fmt == "all" else [fmt]
+    available, warning = filter_available_formats(requested)
+    if warning:
+        console.print(f"[yellow]{warning}[/yellow]")
+    if not available:
+        return  # only PDF was requested and ReportLab is missing — message already shown above
+
     try:
-        if fmt == "all":
-            paths = generate_all_formats(data, filename)
-            for p in paths:
-                console.print(f"[green]Saved:[/green] {p}")
-        else:
-            path = generate_report(data, fmt, filename)
+        for f in available:
+            path = generate_report(data, f, filename)
             console.print(f"[green]Saved:[/green] {path}")
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]Failed to generate report: {exc}[/red]")
@@ -357,6 +360,11 @@ def run_multi_task_scan(target: str, settings: Settings) -> None:
     format_indices = _select_multi("Select output formats", OUTPUT_FORMAT_KEYS,
                                     [f.upper() for f in OUTPUT_FORMAT_KEYS])
     output_formats = [OUTPUT_FORMAT_KEYS[i - 1] for i in format_indices]
+    output_formats, format_warning = filter_available_formats(output_formats)
+    if format_warning:
+        console.print(f"[yellow]{format_warning}[/yellow]")
+    if not output_formats:
+        console.print("[yellow]No usable output formats selected — reports will not be generated for this job.[/yellow]")
 
     # Build the ordered task list.
     ordered_keys = order_tasks(selected_keys)
@@ -438,7 +446,9 @@ def run_multi_task_scan(target: str, settings: Settings) -> None:
     else:
         console.print("[green]Scan completed successfully.[/green]")
 
-    if Prompt.ask("Generate an aggregated report for this job?", choices=["y", "n"], default="y") == "y":
+    if not output_formats:
+        console.print("[dim]Skipping report generation — no usable output formats.[/dim]")
+    elif Prompt.ask("Generate an aggregated report for this job?", choices=["y", "n"], default="y") == "y":
         filename = Prompt.ask("Filename (blank = auto timestamp)", default="").strip() or None
         data = build_job_report_data(job, notes=notes)
         try:

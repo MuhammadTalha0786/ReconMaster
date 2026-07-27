@@ -1,4 +1,9 @@
-rich>=13.7.0
-colorama>=0.4.6
-reportlab>=4.0.0
-python-nmap>=0.7.1
+# Core dependencies actually imported by ReconMaster's own code.
+rich>=13.7.0        # terminal UI: menu, tables, panels, prompts (menu.py, cli.py)
+colorama>=0.4.6     # Rich's Windows/cmd.exe ANSI color translation layer
+reportlab>=4.0.0    # PDF report generation (report.py) — see README "Report Generation"
+
+# Note: python-nmap is intentionally NOT listed here. ReconMaster invokes
+# the nmap binary directly via subprocess (scanner.py) rather than through
+# the python-nmap wrapper library, so it is not an actual dependency of
+# this codebase.

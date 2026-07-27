@@ -24,7 +24,8 @@ from rich.console import Console
 
 import parser as parser_mod
 from config import APP_NAME, APP_SUBTITLE, APP_VERSION, SCAN_TIMEOUTS
-from report import build_report_data, generate_all_formats, generate_report
+from environment import filter_available_formats
+from report import build_report_data, generate_report
 from scanner import (
     NmapNotFoundError, ScanTimeoutError, aggressive_scan_args, host_discovery_args,
     nse_script_args, os_detection_args, port_scan_args, run_nmap_with_xml,
@@ -128,11 +129,16 @@ def run_cli(argv=None) -> int:
     os_guess = parser_mod.parse_os_guess(result.raw_output)
     data = build_report_data(result, os_guess=os_guess)
 
-    if args.format == "all":
-        for path in generate_all_formats(data, args.filename):
-            console.print(f"[green]Saved:[/green] {path}")
-    else:
-        path = generate_report(data, args.format, args.filename)
+    requested = ["txt", "json", "xml", "html", "pdf"] if args.format == "all" else [args.format]
+    available, warning = filter_available_formats(requested)
+    if warning:
+        console.print(f"[yellow]{warning}[/yellow]")
+    if not available:
+        console.print("[yellow]No usable output formats — report not generated.[/yellow]")
+        return 0
+
+    for fmt in available:
+        path = generate_report(data, fmt, args.filename)
         console.print(f"[green]Saved:[/green] {path}")
 
     return 0

@@ -14,6 +14,7 @@ Run with:
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -22,7 +23,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import environment
 import firewall
+import logger as logger_mod
+import parser as parser_mod
 import utils
 from job import ScanJob, ScanTask, TaskStatus, order_tasks, run_job, skip_redundant_tasks
 from report import build_job_report_data, build_report_data, generate_job_reports, generate_report
@@ -472,6 +476,390 @@ class TestFirewallValueValidation(unittest.TestCase):
         must still be rejected rather than silently used."""
         self.assertFalse(firewall.validate_technique_value("custom_ttl", "999"))
         self.assertFalse(firewall.validate_technique_value("data_length", "-5"))
+
+
+class TestPythonEnvironmentDetection(unittest.TestCase):
+    """Python interpreter/version detection (environment.py)."""
+
+    def test_check_python_version_passes_low_bar(self):
+        # A minimum far below anything realistic must always pass,
+        # regardless of the exact Python version running these tests.
+        self.assertTrue(environment.check_python_version((2, 0)))
+
+    def test_check_python_version_fails_impossible_bar(self):
+        # A minimum far above anything realistic must always fail.
+        self.assertFalse(environment.check_python_version((99, 0)))
+
+    def test_check_module_available_true_for_stdlib_module(self):
+        self.assertTrue(environment.check_module_available("json"))
+
+    def test_check_module_available_false_for_nonexistent_module(self):
+        self.assertFalse(environment.check_module_available("definitely_not_a_real_module_xyz"))
+
+    def test_check_missing_modules_reports_only_missing_ones(self):
+        missing = environment.check_missing_modules(["json", "definitely_not_a_real_module_xyz"])
+        self.assertEqual(missing, ["definitely_not_a_real_module_xyz"])
+
+
+class TestVenvDetection(unittest.TestCase):
+    """Project .venv detection — regression-tests the sys.prefix fix
+    (an earlier version used Path(sys.executable).resolve(), which
+    follows the venv python's symlink chain to the system interpreter
+    and wrongly reported 'not in venv')."""
+
+    def test_project_venv_path_is_under_base_dir(self):
+        from config import BASE_DIR
+        self.assertEqual(environment.get_project_venv_path(), BASE_DIR / ".venv")
+
+    def test_matches_when_sys_prefix_equals_venv_path(self):
+        fake_venv = Path(tempfile.mkdtemp(prefix="fake_venv_"))
+        try:
+            with patch("environment.sys.prefix", str(fake_venv)):
+                self.assertTrue(environment.is_running_in_project_venv(fake_venv))
+        finally:
+            shutil.rmtree(fake_venv, ignore_errors=True)
+
+    def test_does_not_match_when_sys_prefix_differs(self):
+        fake_venv = Path(tempfile.mkdtemp(prefix="fake_venv_"))
+        other_prefix = Path(tempfile.mkdtemp(prefix="other_prefix_"))
+        try:
+            with patch("environment.sys.prefix", str(other_prefix)):
+                self.assertFalse(environment.is_running_in_project_venv(fake_venv))
+        finally:
+            shutil.rmtree(fake_venv, ignore_errors=True)
+            shutil.rmtree(other_prefix, ignore_errors=True)
+
+    def test_symlinked_venv_python_still_detected_correctly(self):
+        """Regression test: a venv's python binary is typically a symlink
+        chain to the system interpreter. sys.prefix must still correctly
+        identify the venv regardless of where that symlink chain resolves."""
+        fake_venv = Path(tempfile.mkdtemp(prefix="fake_venv_"))
+        try:
+            bin_dir = fake_venv / "bin"
+            bin_dir.mkdir()
+            real_python = Path(sys.executable).resolve()
+            symlinked_python = bin_dir / "python"
+            try:
+                symlinked_python.symlink_to(real_python)
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlinks not supported in this environment")
+            # sys.prefix (not sys.executable) is what venv sets — simulate
+            # that correctly here rather than relying on resolving the
+            # symlink, which is exactly the bug this test guards against.
+            with patch("environment.sys.prefix", str(fake_venv)):
+                self.assertTrue(environment.is_running_in_project_venv(fake_venv))
+        finally:
+            shutil.rmtree(fake_venv, ignore_errors=True)
+
+    def test_environment_warning_none_when_venv_does_not_exist(self):
+        report = environment.EnvironmentReport(
+            python_executable=sys.executable, python_version="3.11", python_version_ok=True,
+            venv_path=Path("/nonexistent/.venv"), venv_exists=False, running_in_project_venv=False,
+        )
+        self.assertIsNone(environment.format_environment_warning(report))
+
+    def test_environment_warning_none_when_already_in_project_venv(self):
+        report = environment.EnvironmentReport(
+            python_executable=sys.executable, python_version="3.11", python_version_ok=True,
+            venv_path=Path("/some/.venv"), venv_exists=True, running_in_project_venv=True,
+        )
+        self.assertIsNone(environment.format_environment_warning(report))
+
+    def test_environment_warning_shown_when_venv_exists_but_inactive(self):
+        report = environment.EnvironmentReport(
+            python_executable="/usr/bin/python3", python_version="3.11", python_version_ok=True,
+            venv_path=Path("/project/.venv"), venv_exists=True, running_in_project_venv=False,
+        )
+        warning = environment.format_environment_warning(report)
+        self.assertIsNotNone(warning)
+        self.assertIn("Environment Warning", warning)
+        self.assertIn("/usr/bin/python3", warning)
+        self.assertIn(".venv", warning)
+
+
+class TestReportLabDetection(unittest.TestCase):
+    """ReportLab-specific detection, since PDF generation depends on it."""
+
+    def test_reportlab_is_actually_installed_in_this_environment(self):
+        # ReportLab is a hard requirement (requirements.txt) — confirm the
+        # detection function agrees with reality in the test environment.
+        self.assertTrue(environment.check_reportlab_available())
+
+    def test_filter_available_formats_keeps_pdf_when_available(self):
+        formats, warning = environment.filter_available_formats(["txt", "pdf"])
+        self.assertEqual(formats, ["txt", "pdf"])
+        self.assertIsNone(warning)
+
+    def test_filter_available_formats_drops_pdf_when_reportlab_missing(self):
+        with patch("environment.check_reportlab_available", return_value=False):
+            formats, warning = environment.filter_available_formats(["txt", "pdf", "json"])
+        self.assertEqual(formats, ["txt", "json"])
+        self.assertIsNotNone(warning)
+        self.assertIn("ReportLab", warning)
+
+    def test_filter_available_formats_no_warning_when_pdf_not_requested(self):
+        with patch("environment.check_reportlab_available", return_value=False):
+            formats, warning = environment.filter_available_formats(["txt", "json"])
+        self.assertEqual(formats, ["txt", "json"])
+        self.assertIsNone(warning)
+
+    def test_missing_reportlab_message_is_actionable(self):
+        message = environment.format_missing_reportlab_message()
+        self.assertIn("pip install -r requirements.txt", message)
+        self.assertIn("pip install reportlab", message)
+
+
+class TestNmapStartupDoesNotBlockApp(unittest.TestCase):
+    """Regression tests: Nmap being unavailable must be a warning, not a
+    reason to refuse to start ReconMaster entirely — banner grabbing and
+    other non-Nmap features must remain usable."""
+
+    def test_banner_grabbing_works_when_nmap_unavailable(self):
+        import menu
+        from banner import BannerResult
+        from settings import Settings
+
+        fake_banners = [BannerResult(host="10.0.0.5", port=22, banner="SSH-2.0-OpenSSH", reachable=True)]
+        with patch("scanner.check_nmap_available", return_value=False), \
+             patch("menu.banner_mod.grab_banners", return_value=fake_banners):
+            try:
+                menu.handle_banner_grabbing("10.0.0.5", Settings())
+            except Exception as exc:  # noqa: BLE001
+                self.fail(f"Banner grabbing raised an exception when Nmap was unavailable: {exc}")
+
+    def test_multi_task_job_isolates_nmap_dependent_failure_from_banner_task(self):
+        """A port scan (needs Nmap) failing must not prevent a banner-grab
+        task (doesn't need Nmap) in the same job from completing."""
+        from banner import BannerResult
+        from scanner import NmapNotFoundError
+
+        tasks = [
+            ScanTask("port_scan", "Port Scan", ["-F"], timeout=180),
+            ScanTask("banner_grab", "Banner Grabbing", [], timeout=60, task_type="banner_grab"),
+        ]
+        job = ScanJob(target="10.0.0.5", tasks=tasks)
+        fake_banners = [BannerResult(host="10.0.0.5", port=22, banner="SSH-2.0-OpenSSH", reachable=True)]
+
+        with patch("job.run_nmap_with_xml", side_effect=NmapNotFoundError("nmap not found")), \
+             patch("job.banner_mod.grab_banners", return_value=fake_banners):
+            run_job(job)
+
+        self.assertEqual(tasks[0].status, TaskStatus.FAILED)
+        self.assertEqual(tasks[1].status, TaskStatus.COMPLETED)
+        self.assertEqual(len(tasks[1].banners), 1)
+
+    def test_nmap_dependent_cli_scan_fails_cleanly_not_with_traceback(self):
+        """An Nmap-dependent CLI scan with Nmap missing must return a
+        clean error code and message, not propagate a raw exception."""
+        import cli
+        from scanner import NmapNotFoundError
+
+        with patch("cli.run_nmap_with_xml", side_effect=NmapNotFoundError("Nmap was not found on PATH.")):
+            try:
+                exit_code = cli.run_cli(["--target", "10.0.0.5", "--scan", "fast"])
+            except NmapNotFoundError:
+                self.fail("NmapNotFoundError propagated out of run_cli() instead of being handled cleanly")
+        self.assertEqual(exit_code, 1)
+
+    def test_main_module_no_longer_hard_exits_when_nmap_missing(self):
+        """Regression test for the core bug: main._run() previously did
+        'return 1' immediately when Nmap was unavailable, before ever
+        reaching the menu/CLI dispatch. It must now only warn and
+        continue to dispatch normally."""
+        import inspect
+
+        import main as main_module
+        source = inspect.getsource(main_module._run)
+        # The old behavior guarded dispatch behind a Nmap-availability
+        # check; the fixed version dispatches unconditionally after
+        # warning. This asserts the check no longer gates dispatch.
+        self.assertNotIn("if not check_nmap_available():", source)
+
+
+class TestParser(unittest.TestCase):
+    """Nmap output text-parsing helpers used by report.py."""
+
+    def test_parse_open_ports_extracts_only_open_ports(self):
+        output = (
+            "PORT     STATE  SERVICE VERSION\n"
+            "22/tcp   open   ssh     OpenSSH 8.9p1\n"
+            "80/tcp   open   http    Apache httpd 2.4.52\n"
+            "111/tcp  closed rpcbind\n"
+        )
+        ports = parser_mod.parse_open_ports(output)
+        self.assertEqual(len(ports), 2)
+        self.assertEqual(ports[0]["port"], 22)
+        self.assertEqual(ports[0]["protocol"], "tcp")
+        self.assertIn("ssh", ports[0]["service"])
+        self.assertIn("OpenSSH", ports[0]["service"])
+
+    def test_parse_open_ports_empty_output(self):
+        self.assertEqual(parser_mod.parse_open_ports(""), [])
+
+    def test_parse_open_ports_no_matches(self):
+        self.assertEqual(parser_mod.parse_open_ports("Host seems down."), [])
+
+    def test_parse_os_guess_from_os_details_line(self):
+        output = "Running: Linux 5.X\nOS details: Linux 5.4 - 5.15\n"
+        self.assertEqual(parser_mod.parse_os_guess(output), "Linux 5.4 - 5.15")
+
+    def test_parse_os_guess_falls_back_to_running_line(self):
+        output = "Running: Linux 5.X\n"
+        self.assertEqual(parser_mod.parse_os_guess(output), "Linux 5.X")
+
+    def test_parse_os_guess_empty_when_absent(self):
+        self.assertEqual(parser_mod.parse_os_guess("Host is up."), "")
+
+
+class TestLogger(unittest.TestCase):
+    """Logging setup and helper functions (logger.py)."""
+
+    def test_get_logger_returns_configured_logger_with_handlers(self):
+        test_logger = logger_mod.get_logger("reconmaster_test_logger")
+        self.assertTrue(len(test_logger.handlers) >= 2)  # file + console
+
+    def test_get_logger_does_not_duplicate_handlers_on_repeated_calls(self):
+        first = logger_mod.get_logger("reconmaster_test_logger_dup")
+        handler_count_after_first = len(first.handlers)
+        second = logger_mod.get_logger("reconmaster_test_logger_dup")
+        self.assertIs(first, second)
+        self.assertEqual(len(second.handlers), handler_count_after_first)
+
+    def test_log_helpers_do_not_raise(self):
+        test_logger = logger_mod.get_logger("reconmaster_test_logger_helpers")
+        try:
+            logger_mod.log_scan_start(test_logger, "10.0.0.5", ["nmap", "-sn", "10.0.0.5"])
+            logger_mod.log_scan_end(test_logger, "10.0.0.5", 1.23)
+            logger_mod.log_error(test_logger, "example error")
+            logger_mod.log_warning(test_logger, "example warning")
+            logger_mod.log_program_start(test_logger, "1.0.0")
+            logger_mod.log_program_exit(test_logger, 0)
+            logger_mod.log_job_start(test_logger, "10.0.0.5", ["port_scan", "nse_scan"], "default",
+                                      nse_scripts=["vuln"], firewall_techniques=["ack"])
+            logger_mod.log_report_generated(test_logger, "pdf", "/tmp/report.pdf")
+        except Exception as exc:  # noqa: BLE001
+            self.fail(f"A logger helper raised unexpectedly: {exc}")
+
+    def test_log_file_is_actually_written(self):
+        from config import LOGS_DIR
+        from datetime import datetime
+
+        test_logger = logger_mod.get_logger("reconmaster_test_logger_file")
+        unique_message = f"UNIQUE_TEST_MARKER_{id(self)}"
+        logger_mod.log_error(test_logger, unique_message)
+        log_file = LOGS_DIR / f"reconmaster_{datetime.now().strftime('%Y_%m_%d')}.log"
+        self.assertTrue(log_file.exists())
+        self.assertIn(unique_message, log_file.read_text(encoding="utf-8"))
+
+
+class TestNmapStartupWarningContent(unittest.TestCase):
+    """Confirms the exact startup messaging for both Nmap states."""
+
+    def test_warns_clearly_when_nmap_unavailable(self):
+        import main as main_module
+        with patch("main.check_nmap_available", return_value=False):
+            with patch.object(main_module.console, "print") as mock_print:
+                main_module._check_nmap_and_warn()
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertIn("Nmap was not found on PATH", printed)
+        self.assertIn("Nmap-dependent scan features will be unavailable", printed)
+        self.assertIn("Some ReconMaster functionality may still be available", printed)
+
+    def test_confirms_clearly_when_nmap_available(self):
+        import main as main_module
+        with patch("main.check_nmap_available", return_value=True), \
+             patch("main.check_nmap_version", return_value="Nmap version 7.94"):
+            with patch.object(main_module.console, "print") as mock_print:
+                main_module._check_nmap_and_warn()
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertIn("Nmap detected", printed)
+        self.assertIn("7.94", printed)
+
+
+class TestNmapDetection(unittest.TestCase):
+    """Nmap availability detection — must use a safe argument-list
+    subprocess invocation, never shell=True."""
+
+    def test_returns_none_when_nmap_not_on_path(self):
+        with patch("environment.shutil.which", return_value=None):
+            self.assertIsNone(environment.check_nmap_version())
+
+    def test_parses_first_line_of_version_output(self):
+        fake_completed = type("FakeResult", (), {
+            "returncode": 0, "stdout": "Nmap version 7.94 ( https://nmap.org )\nPlatform: x86_64\n",
+        })()
+        with patch("environment.shutil.which", return_value="/usr/bin/nmap"), \
+             patch("environment.subprocess.run", return_value=fake_completed) as mock_run:
+            version = environment.check_nmap_version()
+        self.assertEqual(version, "Nmap version 7.94 ( https://nmap.org )")
+        # Verify it's invoked as an argument list, never shell=True.
+        _, kwargs = mock_run.call_args
+        self.assertFalse(kwargs.get("shell", False))
+        args_list = mock_run.call_args[0][0]
+        self.assertIsInstance(args_list, list)
+
+    def test_handles_nonzero_return_code(self):
+        fake_completed = type("FakeResult", (), {"returncode": 1, "stdout": ""})()
+        with patch("environment.shutil.which", return_value="/usr/bin/nmap"), \
+             patch("environment.subprocess.run", return_value=fake_completed):
+            self.assertIsNone(environment.check_nmap_version())
+
+    def test_handles_timeout_gracefully(self):
+        with patch("environment.shutil.which", return_value="/usr/bin/nmap"), \
+             patch("environment.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="nmap", timeout=10)):
+            self.assertIsNone(environment.check_nmap_version())
+
+    def test_build_environment_report_nmap_fields_consistent(self):
+        with patch("environment.check_nmap_version", return_value="Nmap version 7.94"):
+            report = environment.build_environment_report()
+        self.assertTrue(report.nmap_available)
+        self.assertEqual(report.nmap_version, "Nmap version 7.94")
+
+        with patch("environment.check_nmap_version", return_value=None):
+            report2 = environment.build_environment_report()
+        self.assertFalse(report2.nmap_available)
+        self.assertEqual(report2.nmap_version, "")
+
+
+class TestPDFDependencyErrorHandling(unittest.TestCase):
+    """End-to-end: selecting PDF output with ReportLab missing must show
+    a professional message and safely return, never an ugly traceback."""
+
+    def test_single_scan_report_flow_handles_missing_reportlab_gracefully(self):
+        import menu
+        result = ScanResult(target="10.0.0.5", command=["nmap", "10.0.0.5"],
+                             raw_output="ok", success=True, duration_seconds=0.1)
+        # "6" = pdf in config.REPORT_FORMATS; blank filename.
+        inputs = iter(["6", ""])
+
+        def fake_ask(*args, **kwargs):
+            return next(inputs)
+
+        with patch("rich.prompt.Prompt.ask", side_effect=fake_ask), \
+             patch("environment.check_reportlab_available", return_value=False):
+            try:
+                menu._report_flow(result)  # must not raise
+            except Exception as exc:  # noqa: BLE001
+                self.fail(f"_report_flow raised an exception instead of handling missing ReportLab: {exc}")
+
+    def test_all_formats_still_generates_non_pdf_reports_when_reportlab_missing(self):
+        tmp_dir = Path(tempfile.mkdtemp(prefix="reconmaster_pdf_missing_test_"))
+        try:
+            data = build_report_data(ScanResult(
+                target="10.0.0.5", command=["nmap"], raw_output="ok",
+                success=True, duration_seconds=0.1,
+            ))
+            requested = ["txt", "xml", "json", "html", "pdf"]
+            with patch("environment.check_reportlab_available", return_value=False):
+                available, warning = environment.filter_available_formats(requested)
+            self.assertNotIn("pdf", available)
+            self.assertIsNotNone(warning)
+            for fmt in available:
+                path = generate_report(data, fmt, f"no_reportlab_{fmt}", tmp_dir)
+                self.assertTrue(path.exists())
+                self.assertGreater(path.stat().st_size, 0)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
