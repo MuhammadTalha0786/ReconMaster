@@ -332,13 +332,28 @@ automatically if missing — you never need to create them by hand.
 ## 18. Screenshots
 
 ===== Real screenshots are included  ======
+	
+firewall_options.png
+firewall_scan.png
+firewall_techniques.png
+main_menu.png
+multi_task_scan.png
+nse_results.png
+nse_scan.png
+pdf_report2.png
+pdf_reprort1.png
+port_scan.png
+report_format_selection.png
+report_menu.png
+scan_configuration.png
+scan_execution.png
+scan_results.png
+service_scan.png
+setup_installation.png
+task_selection.png
 
 
 
-Once real screenshots are captured (Linux, Kali, or Windows Terminal),
-save them as the `.png` filename above (dropping `.placeholder`) in
-`screenshots/`, and they can be embedded here with standard Markdown
-image syntax, e.g. `![Main Menu](screenshots/main_menu.png)`.
 
 ## 19. Security / Responsible Use
 
