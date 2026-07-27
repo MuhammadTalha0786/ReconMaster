@@ -331,17 +331,9 @@ automatically if missing — you never need to create them by hand.
 
 ## 18. Screenshots
 
-No real screenshots are included yet — only placeholder marker files
-exist today in `screenshots/` (each named `<name>.png.placeholder`,
-reserving the intended filename for later):
+===== Real screenshots are included  ======
 
-- `main_menu.png.placeholder`
-- `port_scan.png.placeholder`
-- `banner_grab.png.placeholder`
-- `service_scan.png.placeholder`
-- `nse_scan.png.placeholder`
-- `firewall_options.png.placeholder`
-- `report_generated.png.placeholder`
+
 
 Once real screenshots are captured (Linux, Kali, or Windows Terminal),
 save them as the `.png` filename above (dropping `.placeholder`) in
